@@ -1,4 +1,8 @@
 #INCLUDE "TOTVS.CH"
+#INCLUDE "FILEIO.CH"
+
+Static __cConsoleLg	:= GetPvProfString("GENERAL", "ConsoleFile", "console.log", GetAdv97())
+Static __cSystemload	:= "\systemload\"
 
 // https://github.com/amjgfarias/advpl-nordesteatacado.git
 /*/{Protheus.doc} MontaSDF
@@ -13,23 +17,79 @@ User Function MontaSDF
 
 	Local cOrigem  := ""
 	Local cDestino := ""
-	
+	Local cEmpresas:= ""
 	Local aDir1    := {}
 	Local ndir1
+	Local aSM0 		:= {}
+	Local aFill		:= {}
+	Local aLogin	:= {}
+	Local lInDB
+	Local aFiles
+
+	****************** rodar -> FwRebuildIndex
+
+	//OpenSM0Excl() //Realiza a abertura do dicionario Exclusivo para validar se ha alguem acessando
+	//RpcClearEnv()
 	
-	WfPrepEnv("99","01")
+	aLogin := CFGLogin()
+
+	aSM0  := GetSM0()
+	aFill := GetFill(aSM0[01])
+
+	cEmpresas := ToBrackets(ArrTokStr(aSM0,","),',')
+
+	cOrigem := cGetFile('*.*', "Diretorio dos pacotes", 1, "c:\tmpzip\", .F., GETF_RETDIRECTORY+GETF_NETWORKDRIVE+GETF_LOCALHARD)
+	cDestino := cGetFile('*.*', "Diretorio dos pacotes", 1, "c:\tmpzip\", .F., GETF_RETDIRECTORY+GETF_NETWORKDRIVE+GETF_LOCALHARD)
+
+	// sou obrigado a dar um rpc em qualquer empresa para ter acesso ao \systemload\ para excluir os aquivos "lixo" e copia o .json
+	RpcClearEnv()
+	If ! RpcSetEnv(aSM0[01],aFill[01],aLogin[01],aLogin[02],"CFG","U_PBDISTRR")
+		Final("Erro ao efetuar teste de acesso!")
+	Endif
+	lInDB		:= MPDicInDB()
+
+	// limpeza antes de executar
+	If File(__cSystemload+"result.json")
+		fErase(__cSystemload+"result.json")
+	Endif
+	If File(__cSystemload+"upddistr_param.json")
+		fErase(__cSystemload+"upddistr_param.json")
+	Endif
+	// ja cria o arquivo na pasta systemload
+	MakeJson(__cSystemload,aLogin[02],cEmpresas)
+
+	//RpcClearEnv()
+	FERROU := StartJob("UPDDISTR", GetEnvServer(), .T.) // esta gerando erro no R33 
+	RETURN
+
+	ConOut("local do console.log -> "+__cConsoleLg)
 	
-	cOrigem  := SuperGetMV("MV_XORIGEM" ,.F.,"C:\patch_totvs\")
-	cDestino := SuperGetMV("MV_XDESTINO",.F.,"C:\TMPZIP\")
+	//cOrigem  := SuperGetMV("MV_XORIGEM" ,.F.,"c:\patch_totvs\")
+	//cDestino := SuperGetMV("MV_XDESTINO",.F.,"c:\tmpzip\")
 	
 	FwMakeDir(cDestino)
 	FwMakeDir(cOrigem + "processado\")
-	FwMakeDir(cOrigem + "pendentes\")
+	FwMakeDir(cOrigem + "pendente\")
 	FwMakeDir(cOrigem + "erro\")
-	
-	aEval(Directory(cDestino +"systemload\*.*"), { |aFile| fErase(cDestino +"systemload\" + aFile[1]) })
-	
-	aDir1 := Directory(cOrigem + "\*.zip","A")
+
+	// limpeza antes de executar
+	aEval(Directory(__cSystemload +"sdf*.txt"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+	aEval(Directory(__cSystemload +"hlpdf*.txt"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+	aEval(Directory(__cSystemload +"sigah*.h*"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+
+	If ! lInDB
+		aEval(Directory(__cSystemload +"*.dtc"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+		aEval(Directory(__cSystemload +"*.cdx"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+		aEval(Directory(__cSystemload +"*.idx"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+	Else
+		aFiles := PbRetSX()
+		For nDir1:=1 To Len(aFiles)
+			If TcCanOpen(aFiles[nDir1])
+				TcDelFile(aFiles[nDir1])
+			Endif
+		Next nDir1
+	Endif
+	aDir1 := Directory(cOrigem + "*.zip","A")
 	
 	For ndir1 := 1 To Len(aDir1)
 		
@@ -38,21 +98,21 @@ User Function MontaSDF
 			if __CopyFile( cOrigem + aDir1[ndir1][1], cOrigem + "processado\" + aDir1[ndir1][1] )
 				fErase(cOrigem + aDir1[ndir1][1])
 			endif
-			
 		else
-			
 			if __CopyFile( cOrigem + aDir1[ndir1][1], cOrigem + "erro\" + aDir1[ndir1][1] )
 				fErase(cOrigem + aDir1[ndir1][1])
 			endif
-			
-			aEval(Directory(cOrigem + "\*.*"), { |aFile| __CopyFile( cOrigem +aFile[1] , cOrigem + "pendentes\" + aFile[1]) })
-			
+			aEval(Directory(cOrigem + "\sdfbra.txt"), { |aFile| __CopyFile( cOrigem +aFile[1] , cOrigem + "pendentes\" + aFile[1]) })
+			aEval(Directory(cOrigem + "\hlpdfpor.txt"), { |aFile| __CopyFile( cOrigem +aFile[1] , cOrigem + "pendentes\" + aFile[1]) })
 			ndir1 := Len(aDir1)
-			
 		endif
 		
 	Next ndir1
-	
+
+	If File(__cSystemload+"upddistr_param.json")
+		fErase(__cSystemload+"upddistr_param.json")
+	Endif
+
 Return
 
 /*/{Protheus.doc} XListZip
@@ -296,3 +356,151 @@ oktoall        = Corrigir error automaticamente
 deletebkp      = Eliminar arquivos de backup ao término da atualização de cada tabela
 keeplog        = Manter o arquivo de log existente
 */
+
+Static Function GetSM0()
+Local nI
+Local cCodSM0
+Local cArqSX2
+Local aSM0 := {}
+Local aRet := {}
+OpenSm0()
+aSM0 := FWAllGrpCompany()
+For nI := 1 To Len(aSM0)
+	cCodSM0 := aSM0[nI]
+	cArqSX2 := "SX2"+cCodSM0+"0"
+	If aScan(aRet, cCodSM0 ) == 0
+		OpenSxs(,,,,cCodSM0,cArqSX2,"SX2",,.F.)
+		If Select(cArqSX2) > 0
+			aAdd(aRet,cCodSM0)
+		Endif
+	EndIf
+	If Select(cArqSX2) > 0
+		(cArqSX2)->(DbCloseArea())
+	EndIf
+Next nI
+RpcClearEnv()
+Return aRet
+
+
+Static Function GetFill(cSM0)
+Local aFill := {}
+OpenSm0()
+aFill := FWAllFilial(,,cSM0)
+RpcClearEnv()
+Return aFill
+
+
+Static Function ToBrackets(cString,cToken)
+Local cRet     := ""
+Default cString := ''
+Default cToken  := ','
+cRet := FormatIn(StrTran(cString,"'",''),cToken)
+cRet := "["+Substr(cRet,2,Len(cRet))
+cRet := Substr(cRet,1,Len(cRet)-1)+"]"
+Return cRet
+
+
+Static Function MakeJson(Systemload,SenhaUpd,Empresas)
+Local cFile		:= Systemload + "upddistr_param.json"
+Local cTexto	:= ""
+Local nHdle
+cTexto += '{'
+cTexto += '"password":"'+SenhaUpd+'",'
+cTexto += '"simulacao":false,'
+cTexto += '"localizacao":"BRA",'
+cTexto += '"sixexclusive":true,'
+cTexto += '"empresas":'+Empresas+','
+cTexto += '"logprocess":false,'
+cTexto += '"logatualizacao":false,'
+cTexto += '"logwarning":false,'
+cTexto += '"loginclusao":false,'
+cTexto += '"logcritical":true,'
+cTexto += '"updstop":false,'
+cTexto += '"oktoall":true,'
+cTexto += '"deletebkp":true,'
+cTexto += '"keeplog":true'
+cTexto += '}'
+fErase(cFile)
+nHdle := FCreate(cFile,0)
+FWrite(nHdle,cTexto)
+FClose(nHdle)
+Return
+
+
+Static Function CFGLogin()
+Local oBmp
+Local oPanel
+Local oDlg
+Local cUser	:= Space(25)
+Local cPsw	:= Space(20)
+Local oOk
+Local oCancel
+Local lEndDlg	:= .F.
+
+Private oMainWnd
+
+DEFINE MSDIALOG oDlg FROM 000,000 TO 135,305 TITLE 'Autenticação' PIXEL OF oMainWnd
+
+@ 000,000 BITMAP oBmp RESNAME 'APLOGO' SIZE 65,37 NOBORDER PIXEL
+oBmp:Align := CONTROL_ALIGN_RIGHT
+
+@ 000,000 MSPANEL oPanel OF oDlg
+oPanel:Align := CONTROL_ALIGN_ALLCLIENT
+
+@05,05 SAY 'Usuário' SIZE 60,07 OF oPanel PIXEL
+@13,05 MSGET cUser SIZE 80,08 OF oPanel PIXEL
+
+@28,05 SAY 'Senha' SIZE 53,07 OF oPanel PIXEL
+@36,05 MSGET cPsw SIZE 80,08 PASSWORD OF oPanel PIXEL
+
+DEFINE SBUTTON oOk FROM 53,27 TYPE 1 ENABLE OF oPanel PIXEL ACTION( iif( !VldLogin(Alltrim(cUser),Alltrim(cPsw)), MsgStop('Usuário não autorizado'),iif( logupd(cUser), (lEndDlg := .T.,oDlg:End()),Final('Cancelado!') ) ) ) 
+
+DEFINE SBUTTON oCancel FROM 53,57 TYPE 2 ENABLE OF oPanel PIXEL ACTION (lEndDlg := .T.,Final('Cancelado pelo operador'))
+ACTIVATE MSDIALOG oDlg CENTERED VALID lEndDlg
+
+Return { Alltrim (cUser),Alltrim (cPsw) }
+
+
+Static Function VldLogin(cUser,cPsw)
+Local lRet	:= .F.
+Local aRetUser
+PswOrder(2) //1 ID; 2 Nome
+If PswSeek(cUser,.T.)
+	If ! PswName(cPsw)
+		Final('Senha Invalida!')
+	else
+		aRetUser		:= PswRet(1)
+		__cUserID	:= aRetUser[1][1]
+		If FwIsAdmin(__cUserID)
+			__cUserID := Nil
+			lRet := .T.
+		else
+			Final('Usuario nao faz parte do grupo de administradores!')
+		EndIf
+	Endif
+EndIf
+Return lRet
+
+
+Static function logupd(login)
+// tratar no futuro 
+Return .T.
+
+
+Static Function PbRetSX
+Local aRet := {}
+aAdd(aRet,"SX1")
+aAdd(aRet,"SX2")
+aAdd(aRet,"SX3")
+aAdd(aRet,"SX5")
+aAdd(aRet,"SX6")
+aAdd(aRet,"SX7")
+aAdd(aRet,"SX9")
+aAdd(aRet,"SXA")
+aAdd(aRet,"SXB")
+aAdd(aRet,"SXG")
+aAdd(aRet,"SXQ")
+aAdd(aRet,"SXR")
+aAdd(aRet,"XXA")
+aAdd(aRet,"SIX")
+Return aRet
