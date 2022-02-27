@@ -4,7 +4,6 @@
 Static __cConsoleLg	:= GetPvProfString("GENERAL", "ConsoleFile", "console.log", GetAdv97())
 Static __cSystemload	:= "\systemload\"
 
-// https://github.com/amjgfarias/advpl-nordesteatacado.git
 /*/{Protheus.doc} MontaSDF
 Programa para gerar os arquivos sdfbra.txt e hlpdfpor.txt organizadamente em uma pasta systemload para facilitar a aplicação do upddistr
 @type Function
@@ -31,7 +30,7 @@ User Function MontaSDF
 	//OpenSM0Excl() //Realiza a abertura do dicionario Exclusivo para validar se ha alguem acessando
 	//RpcClearEnv()
 	
-	aLogin := CFGLogin()
+	aLogin := DistrLogin()
 
 	aSM0  := GetSM0()
 	aFill := GetFill(aSM0[01])
@@ -390,6 +389,12 @@ RpcClearEnv()
 Return aFill
 
 
+/*/{Protheus.doc} ToBrackets
+@type Function
+@author alessandro@farias.net.br
+@since 26/02/2022
+@version 1.0
+/*/
 Static Function ToBrackets(cString,cToken)
 Local cRet     := ""
 Default cString := ''
@@ -400,6 +405,12 @@ cRet := Substr(cRet,1,Len(cRet)-1)+"]"
 Return cRet
 
 
+/*/{Protheus.doc} MakeJson
+@type Function
+@author alessandro@farias.net.br
+@since 26/02/2022
+@version 1.0
+/*/
 Static Function MakeJson(Systemload,SenhaUpd,Empresas)
 Local cFile		:= Systemload + "upddistr_param.json"
 Local cTexto	:= ""
@@ -426,8 +437,13 @@ FWrite(nHdle,cTexto)
 FClose(nHdle)
 Return
 
-
-Static Function CFGLogin()
+/*/{Protheus.doc} DistrLogin
+@type Function
+@author alessandro@farias.net.br
+@since 26/02/2022
+@version 1.0
+/*/
+Static Function DistrLogin()
 Local oBmp
 Local oPanel
 Local oDlg
