@@ -55,10 +55,10 @@ User Function MontaSDF
 		fErase(__cSystemload+"upddistr_param.json")
 	Endif
 	// ja cria o arquivo na pasta systemload
-	MakeJson(__cSystemload,aLogin[02],cEmpresas)
+	MakeJson(__cSystemload,aLogin[02],aSM0)
 
-	//RpcClearEnv()
-	FERROU := StartJob("UPDDISTR", GetEnvServer(), .T.) // esta gerando erro no R33 
+	RpcClearEnv()
+	AGORAISM := StartJob("UPDDISTR", GetEnvServer(), .T.)
 	RETURN
 
 	ConOut("local do console.log -> "+__cConsoleLg)
@@ -367,6 +367,7 @@ aSM0 := FWAllGrpCompany()
 For nI := 1 To Len(aSM0)
 	cCodSM0 := aSM0[nI]
 	cArqSX2 := "SX2"+cCodSM0+"0"
+	// MPSysSqlName("SX2") // Retorna o nome fisico de uma tabela.
 	If aScan(aRet, cCodSM0 ) == 0
 		OpenSxs(,,,,cCodSM0,cArqSX2,"SX2",,.F.)
 		If Select(cArqSX2) > 0
@@ -415,22 +416,27 @@ Static Function MakeJson(Systemload,SenhaUpd,Empresas)
 Local cFile		:= Systemload + "upddistr_param.json"
 Local cTexto	:= ""
 Local nHdle
-cTexto += '{'
-cTexto += '"password":"'+SenhaUpd+'",'
-cTexto += '"simulacao":false,'
-cTexto += '"localizacao":"BRA",'
-cTexto += '"sixexclusive":true,'
-cTexto += '"empresas":'+Empresas+','
-cTexto += '"logprocess":false,'
-cTexto += '"logatualizacao":false,'
-cTexto += '"logwarning":false,'
-cTexto += '"loginclusao":false,'
-cTexto += '"logcritical":true,'
-cTexto += '"updstop":false,'
-cTexto += '"oktoall":true,'
-cTexto += '"deletebkp":true,'
-cTexto += '"keeplog":true'
-cTexto += '}'
+Local nN
+cTexto += '{' + CRLF
+cTexto += '   "password":"'+SenhaUpd+'",' + CRLF
+cTexto += '   "simulacao":false,' + CRLF
+cTexto += '   "localizacao":"BRA",' + CRLF
+cTexto += '   "sixexclusive":true,' + CRLF
+cTexto += '   "empresas":[' + CRLF
+For nN:=1 To Len(Empresas)
+	cTexto += '      "'+Empresas[nN]+'"' +iif(nN<Len(Empresas),',','')+ CRLF
+Next nN
+cTexto += '   ],' + CRLF
+cTexto += '   "logprocess":false,' + CRLF
+cTexto += '   "logatualizacao":false,' + CRLF
+cTexto += '   "logwarning":false,' + CRLF
+cTexto += '   "loginclusao":false,' + CRLF
+cTexto += '   "logcritical":true,' + CRLF
+cTexto += '   "updstop":false,' + CRLF
+cTexto += '   "oktoall":true,' + CRLF
+cTexto += '   "deletebkp":true,' + CRLF
+cTexto += '   "keeplog":true' + CRLF
+cTexto += '}' + CRLF
 fErase(cFile)
 nHdle := FCreate(cFile,0)
 FWrite(nHdle,cTexto)
