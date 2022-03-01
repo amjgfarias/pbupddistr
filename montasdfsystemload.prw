@@ -511,6 +511,7 @@ Return .T.
 
 Static Function PbRetSX
 Local aRet := {}
+aAdd(aRet,"SIX")
 aAdd(aRet,"SX1")
 aAdd(aRet,"SX2")
 aAdd(aRet,"SX3")
@@ -520,9 +521,12 @@ aAdd(aRet,"SX7")
 aAdd(aRet,"SX9")
 aAdd(aRet,"SXA")
 aAdd(aRet,"SXB")
+aAdd(aRet,"SXD")
 aAdd(aRet,"SXG")
 aAdd(aRet,"SXQ")
 aAdd(aRet,"SXR")
+aAdd(aRet,"XAC")
+aAdd(aRet,"XB3")
+aAdd(aRet,"XBA")
 aAdd(aRet,"XXA")
-aAdd(aRet,"SIX")
 Return aRet
