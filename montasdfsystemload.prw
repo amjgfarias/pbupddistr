@@ -3,6 +3,9 @@
 
 Static __cConsoleLg	:= GetPvProfString("GENERAL", "ConsoleFile", "console.log", GetAdv97())
 Static __cSystemload	:= "\systemload\"
+Static __cServerPath	:= lower(GetPvProfString(GetEnvServer(),"APPSERVER","ERRO",GetADV97()))
+Static __lInDB			:= .F.
+
 
 /*/{Protheus.doc} MontaSDF
 Programa para gerar os arquivos sdfbra.txt e hlpdfpor.txt organizadamente em uma pasta systemload para facilitar a aplicação do upddistr
@@ -22,10 +25,14 @@ User Function MontaSDF
 	Local aSM0 		:= {}
 	Local aFill		:= {}
 	Local aLogin	:= {}
-	Local lInDB
-	Local aFiles
 
-	****************** rodar -> FwRebuildIndex
+	****************** lembrar de rodar -> FwRebuildIndex
+
+	// criar tela para o analista informar o caminho + nome completo do appserver para aplicacao de ptm
+	If __cServerPath	== "erro"
+		WriteSrvProfString("APPSERVER", "c:\r33\protheus\bin\appserver\appserver.exe")
+		__cServerPath	:= lower(GetPvProfString(GetEnvServer(),"APPSERVER","ERRO",GetADV97()))
+	Endif
 
 	//OpenSM0Excl() //Realiza a abertura do dicionario Exclusivo para validar se ha alguem acessando
 	//RpcClearEnv()
@@ -45,21 +52,20 @@ User Function MontaSDF
 	If ! RpcSetEnv(aSM0[01],aFill[01],aLogin[01],aLogin[02],"CFG","U_PBDISTRR")
 		Final("Erro ao efetuar teste de acesso!")
 	Endif
-	lInDB		:= MPDicInDB()
 
-	// limpeza antes de executar
-	If File(__cSystemload+"result.json")
-		fErase(__cSystemload+"result.json")
-	Endif
+	__lInDB		:= MPDicInDB()
+
+	// limpeza inicial antes de executar o 1o pacote
+	CleanSystemLoad()
+
 	If File(__cSystemload+"upddistr_param.json")
 		fErase(__cSystemload+"upddistr_param.json")
 	Endif
+
 	// ja cria o arquivo na pasta systemload
 	MakeJson(__cSystemload,aLogin[02],aSM0)
 
-	RpcClearEnv()
-	AGORAISM := StartJob("UPDDISTR", GetEnvServer(), .T.)
-	RETURN
+	RpcClearEnv() // todas as tabelas devem estar fechadas senao o job do upddistr nao irá rodar
 
 	ConOut("local do console.log -> "+__cConsoleLg)
 	
@@ -71,23 +77,6 @@ User Function MontaSDF
 	FwMakeDir(cOrigem + "pendente\")
 	FwMakeDir(cOrigem + "erro\")
 
-	// limpeza antes de executar
-	aEval(Directory(__cSystemload +"sdf*.txt"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
-	aEval(Directory(__cSystemload +"hlpdf*.txt"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
-	aEval(Directory(__cSystemload +"sigah*.h*"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
-
-	If ! lInDB
-		aEval(Directory(__cSystemload +"*.dtc"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
-		aEval(Directory(__cSystemload +"*.cdx"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
-		aEval(Directory(__cSystemload +"*.idx"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
-	Else
-		aFiles := PbRetSX()
-		For nDir1:=1 To Len(aFiles)
-			If TcCanOpen(aFiles[nDir1])
-				TcDelFile(aFiles[nDir1])
-			Endif
-		Next nDir1
-	Endif
 	aDir1 := Directory(cOrigem + "*.zip","A")
 	
 	For ndir1 := 1 To Len(aDir1)
@@ -101,8 +90,8 @@ User Function MontaSDF
 			if __CopyFile( cOrigem + aDir1[ndir1][1], cOrigem + "erro\" + aDir1[ndir1][1] )
 				fErase(cOrigem + aDir1[ndir1][1])
 			endif
-			aEval(Directory(cOrigem + "\sdfbra.txt"), { |aFile| __CopyFile( cOrigem +aFile[1] , cOrigem + "pendentes\" + aFile[1]) })
-			aEval(Directory(cOrigem + "\hlpdfpor.txt"), { |aFile| __CopyFile( cOrigem +aFile[1] , cOrigem + "pendentes\" + aFile[1]) })
+			aEval(Directory(cOrigem + "\sdfbra.txt"), { |aFile| __CopyFile( cOrigem +aFile[1] , cOrigem + "pendente\" + aFile[1]) })
+			aEval(Directory(cOrigem + "\hlpdfpor.txt"), { |aFile| __CopyFile( cOrigem +aFile[1] , cOrigem + "pendente\" + aFile[1]) })
 			ndir1 := Len(aDir1)
 		endif
 		
@@ -112,12 +101,16 @@ User Function MontaSDF
 		fErase(__cSystemload+"upddistr_param.json")
 	Endif
 
+	RpcClearEnv()
+	RpcSetEnv(aSM0[01],aFill[01],aLogin[01],aLogin[02],"CFG","U_PBDISTRR")
+
 Return
+
 
 /*/{Protheus.doc} XListZip
 Função para descompactar o arquivo zip na pasta temporaria
 @type function
-@version 12.1.23
+@version 1.0
 @author Ulisses Souza
 @since 22/02/2022
 @param cFile, character, Arquivo origem
@@ -180,24 +173,22 @@ Static Function XListZip(cFile, cOrigem, cDestinoOri)
 		
 		//Copia arquivos para o servidor
 		fCpySrv( cDestinoOri + "systemload\" )
-		
+
+		// executar o job
+		RnUpddistr(cNome)
+
 		//Verifica o arquivo de retorno para iniciar outro pacote
-		lCont := .T.
-		while !lCont
-			cStatus := LeArquivo()
-			If cStatus == "2"
-				lCont := .F.
-				lRet  := .T.
-				
-			elseif cStatus == "3"
-				lCont := .F.
-				lRet  := .F.
-				
-			EndIf
-		Enddo
+		cStatus := LeArquivo()
+		If cStatus == "2"
+			lRet  := .T.
+		elseif cStatus $ "1,3"
+			lRet  := .F.
+		EndIf
+
 	endif
 	
 Return lRet
+
 
 /*/{Protheus.doc} fCpySrv
 Copia os arquivos da pasta temporaria para a systemload do sistema
@@ -211,59 +202,33 @@ Copia os arquivos da pasta temporaria para a systemload do sistema
 Static Function fCpySrv( cDirAux )
 
 	Local nAtual  := 0
-	Local cDirSrv := GetSrvProfString("RootPath","") + "\systemload\"
+	Local cDirSrv := GetSrvProfString("RootPath","") + __cSystemload
 	Local aDirSrv := Directory(cDirSrv + "*.*","A")
-	
-	Local cDirBkp := GetSrvProfString("RootPath","") + "\systemload-" + dtos(date()) + strtran(time(),":","-") + "\"
+	Local cDirBkp := GetSrvProfString("RootPath","") + __cSystemload + "upddistr-" + Left(StrTran(StrTran(FWTimeStamp(5,Date(),Time()),"-",""),":",""),15) + "\" 
 	Local aDirAux := Directory(cDirAux + "*.txt","A")
-	Local lCont   := .T.
 	
 	//Cria bkp Diretorio
 	FwMakeDir(cDirBkp)
 	
-	//Percorre os arquivos e copia para pasta BKp
+	//Percorre os arquivos e copia para pasta bkp somentes os arquivos do pacote
 	For nAtual := 1 To Len(aDirSrv)
-		
-		//Pegando o nome do arquivo
-		cNomArq := aDirSrv[nAtual][1]
-		
-		//Copia o arquivo para a pasta do sistema
-		__CopyFile( cDirSrv + cNomArq , cDirBkp + cNomArq )
-		
+		cNomArq := lower(aDirSrv[nAtual][1])
+		If "sdfbra.txt" == cNomArq .Or. "hlpdfpor.txt" == cNomArq
+			//Copia o arquivo para a pasta do sistema
+			__CopyFile( cDirSrv + cNomArq , cDirBkp + cNomArq )
+		Endif
 	Next nAtual
-	
-	
-	//Limpa pasta systemload
-	while lCont
-		aEval(Directory(cDirSrv +"*.txt"), { |aFile| fErase(cDirSrv + aFile[1]) })
-		
-		if len(  Directory(cDirSrv+"*.txt","A") ) == 0
-			lCont := .F.
-		endif
-		
-	enddo
-	
-	//Apaga arquivos de retorno do UpdDistr
-	fErase(cDirSrv + "result.json")
-	//Apaga pasta de dicionarios extras
-	DirRemove(cDirSrv + "refedict")
-	
+
+	CleanSystemLoad()
+
 	//Percorre os arquivos
 	For nAtual := 1 To Len(aDirAux)
-		
-		//Pegando o nome do arquivo
-		cNomArq := aDirAux[nAtual][1]
-		
-		//Copia o arquivo para a pasta do sistema
-		lRet := __CopyFile( cDirAux + cNomArq , cDirSrv + cNomArq )
-		
-		if !lRet
-			exit
-		endif
-		
+		cNomArq := lower(aDirAux[nAtual][1])
+		//Faz a copia do arquivo para a pasta do Systemload
+		__CopyFile( cDirAux + cNomArq , __cSystemload + cNomArq )
 	Next nAtual
-	
-Return lRet
+
+Return
 
 
 /*/{Protheus.doc} LeArquivo
@@ -280,37 +245,36 @@ Função para ler o arquivo no final do UpdDisttr
 Static function LeArquivo()
 
 	Local oFile   := nil
-	Local cLinha  := ""
-	Local cStatus := "0"
-	Local cFile   := GetSrvProfString("rootPath","") + "\systemload\" + "result.json"
-	
+	Local cStatus := "1" //Upddistr não Finalizado
+	Local cFile   := GetSrvProfString("rootPath","") + __cSystemload + "result.json"
+	Local oJson, uRet, aJson
+
 	oFile := FWFileReader():New(cFile)
-	
-	if (oFile:Open())
-		while (oFile:hasLine())
-			cLinha := oFile:GetLine()
-		end
+
+	if oFile:Open()
+		cJson	:= oFile:FullRead()
 		oFile:Close()
-	endif
-	
-	if !Empty(cLinha)
-		if !("success" $ cLinha)
-			//Upddistr Finalizado com sucesso
-			cStatus := "2"
-		else
-			//Upddistr Finalizado com erro
-			cStatus := "3"
-		endif
-		
-		//Upddistr não Finalizado
-		cStatus := "1"
-	endif
+	Endif
+
+	oJson	:= JsonObject():new()
+	uRet	:= oJson:FromJson(cJson)
+	If ValType(uRet) <> "U"
+		Return cStatus
+	Endif
+
+	aJson := oJson:GetNames()
+	oJson:GetJsonObject(aJson[1])
+	If "success" $ lower(oJson:GetJsonObject(aJson[1]))
+		cStatus := "2" //Upddistr Finalizado com sucesso
+	Else
+		cStatus := "3" //Upddistr Finalizado com erro
+	Endif
+	oJson := Nil
 	
 Return cStatus
 
 
 /*
-
 https://tdn.totvs.com/display/public/LMPING/UPDDISTR+executed+via+Job
 
 [UPDJOB]
@@ -443,6 +407,7 @@ FWrite(nHdle,cTexto)
 FClose(nHdle)
 Return
 
+
 /*/{Protheus.doc} DistrLogin
 @type Function
 @author alessandro@farias.net.br
@@ -530,3 +495,60 @@ aAdd(aRet,"XB3")
 aAdd(aRet,"XBA")
 aAdd(aRet,"XXA")
 Return aRet
+
+
+/*/{Protheus.doc} RnUpddistr
+@type Function
+@author alessandro@farias.net.br
+@since 01/03/2022
+@version 1.0
+@example U_MontaSDF
+/*/
+Static Function RnUpddistr(cMsg)
+FWMonitorMsg("PBUPD "+cMsg)
+If LockByName( "RnUpddistr" )
+	StartJob("UPDDISTR", GetEnvServer(), .T.)
+Endif
+UnlockByName( "RnUpddistr" )
+Return
+
+
+/*/{Protheus.doc} CleanSystemLoad
+faz a limpeza do systemload
+@type Function
+@author alessandro@farias.net.br
+@since 01/03/2022
+@version 1.0
+@example U_MontaSDF
+/*/
+Static Function CleanSystemLoad()
+Local nDir1
+Local aFiles
+
+// limpeza dos pacotes antes de executar o pacote
+aEval(Directory(__cSystemload +"sdf*.txt")  , { |aFiles| fErase(__cSystemload + aFiles[1]) })
+aEval(Directory(__cSystemload +"hlpdf*.txt"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+aEval(Directory(__cSystemload +"sigah*.h*") , { |aFiles| fErase(__cSystemload + aFiles[1]) })
+
+aEval(Directory(__cSystemload +"*.dtc"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+aEval(Directory(__cSystemload +"*.cdx"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+aEval(Directory(__cSystemload +"*.idx"), { |aFiles| fErase(__cSystemload + aFiles[1]) })
+
+If __lInDB
+	aFiles := PbRetSX()
+	For nDir1:=1 To Len(aFiles)
+		If TcCanOpen(aFiles[nDir1])
+			TcDelFile(aFiles[nDir1])
+		Endif
+	Next nDir1
+Endif
+
+// limpeza antes de executar
+If File(__cSystemload+"result.json")
+	fErase(__cSystemload+"result.json")
+Endif
+
+//Apaga pasta de dicionarios extras
+DirRemove(__cSystemload + "refedict") // só remove se estiver vazia
+
+Return
