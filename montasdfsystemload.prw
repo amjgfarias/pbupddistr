@@ -36,7 +36,9 @@ User Function MontaSDF
 
 	//OpenSM0Excl() //Realiza a abertura do dicionario Exclusivo para validar se ha alguem acessando
 	//RpcClearEnv()
-	
+
+	FwMakeDir("c:\tmpzip\")
+
 	aLogin := DistrLogin()
 
 	aSM0  := GetSM0()
@@ -418,7 +420,7 @@ Static Function DistrLogin()
 Local oBmp
 Local oPanel
 Local oDlg
-Local cUser	:= Space(25)
+Local cUser	:= Padr('Administrador',25)
 Local cPsw	:= Space(20)
 Local oOk
 Local oCancel
@@ -434,11 +436,11 @@ oBmp:Align := CONTROL_ALIGN_RIGHT
 @ 000,000 MSPANEL oPanel OF oDlg
 oPanel:Align := CONTROL_ALIGN_ALLCLIENT
 
-@05,05 SAY 'Usuário' SIZE 60,07 OF oPanel PIXEL
-@13,05 MSGET cUser SIZE 80,08 OF oPanel PIXEL
+@ 05,05 SAY 'Usuário' SIZE 60,07 OF oPanel PIXEL
+@ 13,05 MSGET cUser SIZE 80,08 OF oPanel PIXEL When .F.
 
-@28,05 SAY 'Senha' SIZE 53,07 OF oPanel PIXEL
-@36,05 MSGET cPsw SIZE 80,08 PASSWORD OF oPanel PIXEL
+@ 28,05 SAY 'Senha' SIZE 53,07 OF oPanel PIXEL
+@ 36,05 MSGET cPsw SIZE 80,08 PASSWORD OF oPanel PIXEL
 
 DEFINE SBUTTON oOk FROM 53,27 TYPE 1 ENABLE OF oPanel PIXEL ACTION( iif( !VldLogin(Alltrim(cUser),Alltrim(cPsw)), MsgStop('Usuário não autorizado'),iif( logupd(cUser), (lEndDlg := .T.,oDlg:End()),Final('Cancelado!') ) ) ) 
 
@@ -506,10 +508,10 @@ Return aRet
 /*/
 Static Function RnUpddistr(cMsg)
 FWMonitorMsg("PBUPD "+cMsg)
-If LockByName( "RnUpddistr" )
+If LockByName( "RnUpddistr",.F.,.F.,.T. )
 	StartJob("UPDDISTR", GetEnvServer(), .T.)
 Endif
-UnlockByName( "RnUpddistr" )
+UnlockByName( "RnUpddistr",.F.,.F.,.T. )
 Return
 
 
