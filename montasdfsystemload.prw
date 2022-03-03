@@ -248,12 +248,33 @@ Static function LeArquivo()
 
 	Local oFile   := nil
 	Local cStatus := "1" //Upddistr não Finalizado
-	Local cFile   := GetSrvProfString("rootPath","") + __cSystemload + "result.json"
+	Local cFile   := ""
 	Local oJson, uRet, aJson
+	Local cJson   := ""
+
+	//+---------------------------------------------------+
+	//Rodando no Servidor aonde o Protheus está instalado |
+	//+---------------------------------------------------+
+	cFile := GetSrvProfString("rootPath","") + __cSystemload + "result.json"
+
+	//+-------------------------------------------------------+
+	//Se estiver rodando em uma Maquina Remote muda o caminho |
+	//+-------------------------------------------------------+
+	If !File(cFile)
+		cFile := __cSystemload + "result.json"
+	EndIf
+
+	//+---------------------------------------------------------------------+
+	//Se não encontrar o arquivo o sistema apresenta mensagem de erro e sai |
+	//+---------------------------------------------------------------------+
+	If !File(cFile)
+		Alert("Erro ao tentar localizar o arquivo result.json")
+		Return cStatus
+	EndIf
 
 	oFile := FWFileReader():New(cFile)
 
-	if oFile:Open()
+	If oFile:Open()
 		cJson	:= oFile:FullRead()
 		oFile:Close()
 	Endif
