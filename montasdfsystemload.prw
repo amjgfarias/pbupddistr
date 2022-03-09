@@ -15,7 +15,15 @@ Programa para gerar os arquivos sdfbra.txt e hlpdfpor.txt organizadamente em uma
 @version 1.0
 @example U_MontaSDF
 /*/
+
 User Function MontaSDF
+Private oMainWnd  := NIL
+Private oProcess  := NIL
+oProcess := MsNewProcess():New( { | lEnd | lOk := RunSDF() }, "pbupddistr Build 1.00", "Aguarde, atualizando ...", .F. )
+oProcess:Activate()
+Return
+
+Static Function RunSDF
 
 	Local cOrigem  := ""
 	Local cDestino := ""
@@ -25,6 +33,8 @@ User Function MontaSDF
 	Local aSM0 		:= {}
 	Local aFill		:= {}
 	Local aLogin	:= {}
+	Local lContinua
+	Local cNomePacote
 
 	****************** lembrar de rodar -> FwRebuildIndex
 
@@ -80,11 +90,19 @@ User Function MontaSDF
 	FwMakeDir(cOrigem + "erro\")
 
 	aDir1 := Directory(cOrigem + "*.zip","A")
-	
+
+	oProcess:SetRegua1( Len(aDir1) )
+
 	For ndir1 := 1 To Len(aDir1)
 		
+		cNomePacote := StrTran(aDir1[ndir1][1],"_ATUALIZACAO_","_")
+		cNomePacote := StrTran(cNomePacote,"_EXPEDICAO_CONTINUA","")
+		oProcess:IncRegua1( cNomePacote )
+
 		//se retornar erro sai do pacote e copia os arquivos pendentes para a pasta não processados
-		if xListZip(aDir1[ndir1][1], cOrigem, cDestino)
+		lContinua := xListZip(aDir1[ndir1][1], cOrigem, cDestino)
+
+		if lContinua
 			if __CopyFile( cOrigem + aDir1[ndir1][1], cOrigem + "processado\" + aDir1[ndir1][1] )
 				fErase(cOrigem + aDir1[ndir1][1])
 			endif
@@ -119,7 +137,7 @@ Função para descompactar o arquivo zip na pasta temporaria
 @param cOrigem, character, Diretório de Origem
 @param cDestino, character, Diretório Destino
 /*/
-Static Function XListZip(cFile, cOrigem, cDestinoOri)
+Static Function xListZip(cFile, cOrigem, cDestinoOri)
 
 	Local nret := 10
 	Local aRet := {}
@@ -149,18 +167,14 @@ Static Function XListZip(cFile, cOrigem, cDestinoOri)
 		if nret == 0
 			aDir1 := Directory(cDestino+"\*.*","D")
 			For ndir1 := 1 To Len(aDir1)
-				
 				If "SDF" $ upper(aDir1[ndir1][1])
 					cDest1 := cDestino+"\"+aDir1[ndir1][1]
 					aDir2 := Directory(cDest1+"\*.*","D")
-					
 					For ndir2 := 1 To Len(aDir2)
 						cDest2 := cDest1+"\"+aDir2[ndir2][1]
-						
 						If "BRA" $ upper(aDir2[ndir2][1])
 							cDest3 := cDest2+"\"
 							aDir3 := Directory(cDest2+"\*.txt","A")
-							
 							For ndir3 := 1 To Len(aDir3)
 								If "SDFBRA.TXT" $ upper(aDir3[ndir3][1]) .Or. "HLPDFPOR.TXT" $ upper(aDir3[ndir3][1])
 									FwMakeDir( cDestinoOri + "systemload\" )
@@ -176,8 +190,10 @@ Static Function XListZip(cFile, cOrigem, cDestinoOri)
 		//Copia arquivos para o servidor
 		fCpySrv( cDestinoOri + "systemload\" )
 
-		// executar o job
-		RnUpddistr(cNome)
+		oProcess:SetRegua2( 2 )
+		oProcess:IncRegua2( "Aplicando sdfbra")
+		RnUpddistr(cNome) // executar o job
+		oProcess:IncRegua2( "sdfbra Aplicado")
 
 		//Verifica o arquivo de retorno para iniciar outro pacote
 		cStatus := LeArquivo()
@@ -528,7 +544,11 @@ Return aRet
 @example U_MontaSDF
 /*/
 Static Function RnUpddistr(cMsg)
-FWMonitorMsg("PBUPD "+cMsg)
+If FindFunction("FWMonitorMsg")
+	FWMonitorMsg("PBUPD "+cMsg)
+else
+	PtInternal(1,"PBUPD "+cMsg)
+Endif
 If LockByName( "RnUpddistr",.F.,.F.,.T. )
 	StartJob("UPDDISTR", GetEnvServer(), .T.)
 Endif
@@ -572,6 +592,6 @@ If File(__cSystemload+"result.json")
 Endif
 
 //Apaga pasta de dicionarios extras
-DirRemove(__cSystemload + "refedict") // só remove se estiver vazia
+FWDirRemove(__cSystemload + "refedict",.T.,.T.) // https://tdn.totvs.com/display/framework/FWDirRemove
 
 Return
