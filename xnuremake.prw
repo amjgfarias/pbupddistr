@@ -10,31 +10,36 @@
 
 User Function xnuremake
 Local nI, nJ
-Local cOrigem := "c:\r27\protheus_data\"
-Local dDestino:= "c:\r27\protheus_data\novos_menus"
-Local aPastas := {"menus","system"}
-Local aDir    := {}
+Local cOrigem    := "d:\tcloud\" // "c:\r27\protheus_data\"
+Local dDestino   := "d:\tcloud\novos_menus\" // "c:\r27\protheus_data\novos_menus"
+Local Duplicados := "d:\tcloud\duplicados\" // "c:\r27\protheus_data\novos_menus"
+// Local aPastas := {"menu-teste"} // {"menus","systemxnu"}
+Local aPastas    := {"menus","systemxnu"}
+Local aDir       := {}
 FWMakeDir(dDestino,.F.)
+FWMakeDir(Duplicados,.F.)
 For nI:=1 To Len(aPastas)
 	aDir := Directory( cOrigem+aPastas[nI]+"\*.xnu" )
 	For nJ:=1 To Len(aDir)
-		ConOut( cOrigem+aPastas[nI]+"\"+aDir[nJ][01] + " -> " + lower(dDestino+"\"+aPastas[nI]+aDir[nJ][01]) )
-		remake( cOrigem+aPastas[nI]+"\"+aDir[nJ][01], lower(dDestino+"\"+aPastas[nI]+aDir[nJ][01]), dDestino + "\" + aPastas[nI], aDir[nJ][01] )
+		// ConOut( cOrigem+aPastas[nI]+"\"+aDir[nJ][01] + " -> " + lower(dDestino+"\"+aPastas[nI]+aDir[nJ][01]) )
+		remake( lower(cOrigem+aPastas[nI]+"\"+aDir[nJ][01]), lower(dDestino+aPastas[nI]+"\"+aDir[nJ][01]), lower(dDestino + aPastas[nI]), lower(aDir[nJ][01]), lower(Duplicados + aPastas[nI]) )
 	Next nJ
 Next nI
 Return
 
 
-Static Function remake( cMenu, cNewNemnu, NewFolder, NewFile )
-Local cLine   := Access := ''
+Static Function remake( cMenu, cNewNemnu, NewFolder, NewFile, Duplicados )
+Local cLine   := Access := cItemId := ''
 Local aLinhas := {}
 Local nI      := 1
 Local nItemID := 0
 Local cTab  := Chr(9)
 Local lvez1, lvez2, lvez3, lvez4
-
+Local aItemId := {}
+Local lIDDuplicado := .F.
+Local cPBTimeI := Time()
 FWMakeDir(NewFolder)
-
+FWMakeDir(Duplicados)
 FT_FUSE( cMenu )
 FT_FGOTOP()
 Do While ! FT_FEOF()
@@ -47,8 +52,24 @@ Do While ! FT_FEOF()
 	Endif
 	FT_FSKIP()
 Enddo
+FT_FGOTOP()
+nI := 0
+Do While ! FT_FEOF()
+	nI++
+	cItemId := Substr( cLine, At('>',cLine)+1 )
+	cItemId := Substr( cItemId, 1, At('<',cItemId)-1)
+	If !Empty(cItemId)
+		If aScan(aItemId,cItemId) == 0
+			aAdd(aItemId,cItemId)
+		Else
+			If Len(aItemId) <> 0
+				lIDDuplicado := .T.
+			Endif
+		Endif
+	Endif
+	FT_FSKIP()
+Enddo
 FT_FUSE()
-
 FT_FUSE( cMenu )
 FT_FGOTOP()
 lvez1 := .T.
@@ -118,7 +139,17 @@ For nI:=1 To Len(aLinhas)
 	Endif
 	grv2txt( cNewNemnu, aLinhas[nI] )
 Next nI
-__CopyFile( cNewNemnu, NewFolder + "\" + NewFile )
+ConOut()
+If __CopyFile( cNewNemnu, NewFolder + "\" + NewFile )
+	ConOut( cNewNemnu + " -> " + NewFolder + "\" + NewFile + ' Duracao: ' + ElapTime( cPBTimeI, Time() ) )
+Endif
+If lIDDuplicado
+	If __CopyFile( NewFolder + "\" + NewFile, Duplicados + "\" + NewFile )
+		ConOut( 'Menu com Id duplicado '+ cNewNemnu + " -> " + Duplicados + "\" + NewFile )
+		fErase(cNewNemnu)
+		fErase(NewFolder + "\" + NewFile)
+	Endif
+Endif
 Return
 
 
